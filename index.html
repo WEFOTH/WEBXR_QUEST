@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rhino zu WebXR</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <h1>Rhino → WebXR</h1>
+      <p>
+        Exportiere dein Rhino-Modell als <strong>.glb</strong> oder <strong>.gltf</strong>
+        und lade es hier. Auf einem Smartphone erscheint automatisch die AR-Schaltfläche.
+      </p>
+      <div class="controls">
+        <label class="button" for="fileInput">Rhino-Modell laden</label>
+        <input id="fileInput" type="file" accept=".glb,.gltf" />
+        <button id="resetViewBtn" type="button">Ansicht zurücksetzen</button>
+      </div>
+      <p class="hint">
+        Tipp: In Rhino kannst du das Modell über Exportieren als GLTF/GLB speichern.
+        Für WebXR sind GLTF/GLB die beste Wahl.
+      </p>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
