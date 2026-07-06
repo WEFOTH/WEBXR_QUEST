@@ -7,7 +7,7 @@ BASE_URL = 'https://wefoth.github.io/WEBXR_TEST/'
 OUT_DIR = Path(__file__).parent / 'qr-codes'
 
 TARGETS = {
-    'qrcode.png': BASE_URL,
+    'qrcode.png': BASE_URL + 'src/index.html',
 }
 
 for filename, url in TARGETS.items():

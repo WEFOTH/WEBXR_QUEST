@@ -199,7 +199,8 @@ function loadModelFromFile(file) {
 }
 
 fileInput.addEventListener('change', (event) => {
-  const file = event.target.files?.[0];
+  const files = event.target.files;
+  const file = files && files[0];
   if (file) {
     loadModelFromFile(file);
   } else {
@@ -289,11 +290,12 @@ function setObjectHighlight(placed, active) {
   placed.axes.visible = active;
   placed.group.traverse((child) => {
     if (!child.isMesh || !child.material || !child.material.color) return;
+    const emissive = child.material.emissive;
     if (active) {
-      child.material.emissive?.setHex(0x111111);
+      if (emissive && emissive.setHex) emissive.setHex(0x111111);
       child.material.emissiveIntensity = 0.35;
     } else {
-      child.material.emissive?.setHex(0x000000);
+      if (emissive && emissive.setHex) emissive.setHex(0x000000);
       child.material.emissiveIntensity = 0;
     }
   });
@@ -342,7 +344,7 @@ function moveSelectedObject(axis, direction) {
     return;
   }
 
-  const useSnap = snapToggle?.checked ?? true;
+  const useSnap = snapToggle ? snapToggle.checked : true;
   const step = useSnap ? snapStep : fallbackStep;
   selected.group.position[axis] += direction * step;
   if (useSnap) {
@@ -359,11 +361,11 @@ function rotateSelectedObject(axis, direction) {
     return;
   }
 
-  const stepDeg = Number(angleStepSelect?.value ?? 5);
+  const stepDeg = Number(angleStepSelect ? angleStepSelect.value : 5);
   const stepRad = THREE.MathUtils.degToRad(stepDeg);
   selected.group.rotation[axis] += direction * stepRad;
 
-  if (snapToggle?.checked ?? true) {
+  if (snapToggle ? snapToggle.checked : true) {
     selected.group.rotation[axis] = roundToStep(selected.group.rotation[axis], stepRad);
   }
 
@@ -486,30 +488,47 @@ window.addEventListener('resize', () => {
   }
 });
 
-prevObjBtn?.addEventListener('click', () => cycleSelection(-1));
-nextObjBtn?.addEventListener('click', () => cycleSelection(1));
+if (prevObjBtn) prevObjBtn.addEventListener('click', () => cycleSelection(-1));
+if (nextObjBtn) nextObjBtn.addEventListener('click', () => cycleSelection(1));
 
-document.getElementById('moveXNeg')?.addEventListener('click', () => moveSelectedObject('x', -1));
-document.getElementById('moveXPos')?.addEventListener('click', () => moveSelectedObject('x', 1));
-document.getElementById('moveYNeg')?.addEventListener('click', () => moveSelectedObject('y', -1));
-document.getElementById('moveYPos')?.addEventListener('click', () => moveSelectedObject('y', 1));
-document.getElementById('moveZNeg')?.addEventListener('click', () => moveSelectedObject('z', -1));
-document.getElementById('moveZPos')?.addEventListener('click', () => moveSelectedObject('z', 1));
+const moveXNegBtn = document.getElementById('moveXNeg');
+const moveXPosBtn = document.getElementById('moveXPos');
+const moveYNegBtn = document.getElementById('moveYNeg');
+const moveYPosBtn = document.getElementById('moveYPos');
+const moveZNegBtn = document.getElementById('moveZNeg');
+const moveZPosBtn = document.getElementById('moveZPos');
+const rotXNegBtn = document.getElementById('rotXNeg');
+const rotXPosBtn = document.getElementById('rotXPos');
+const rotYNegBtn = document.getElementById('rotYNeg');
+const rotYPosBtn = document.getElementById('rotYPos');
+const rotZNegBtn = document.getElementById('rotZNeg');
+const rotZPosBtn = document.getElementById('rotZPos');
 
-document.getElementById('rotXNeg')?.addEventListener('click', () => rotateSelectedObject('x', -1));
-document.getElementById('rotXPos')?.addEventListener('click', () => rotateSelectedObject('x', 1));
-document.getElementById('rotYNeg')?.addEventListener('click', () => rotateSelectedObject('y', -1));
-document.getElementById('rotYPos')?.addEventListener('click', () => rotateSelectedObject('y', 1));
-document.getElementById('rotZNeg')?.addEventListener('click', () => rotateSelectedObject('z', -1));
-document.getElementById('rotZPos')?.addEventListener('click', () => rotateSelectedObject('z', 1));
+if (moveXNegBtn) moveXNegBtn.addEventListener('click', () => moveSelectedObject('x', -1));
+if (moveXPosBtn) moveXPosBtn.addEventListener('click', () => moveSelectedObject('x', 1));
+if (moveYNegBtn) moveYNegBtn.addEventListener('click', () => moveSelectedObject('y', -1));
+if (moveYPosBtn) moveYPosBtn.addEventListener('click', () => moveSelectedObject('y', 1));
+if (moveZNegBtn) moveZNegBtn.addEventListener('click', () => moveSelectedObject('z', -1));
+if (moveZPosBtn) moveZPosBtn.addEventListener('click', () => moveSelectedObject('z', 1));
 
-snapToggle?.addEventListener('change', () => {
-  updateStatus(snapToggle.checked ? 'Snap aktiv: 0.5 cm Raster' : 'Snap deaktiviert: freie Schritte');
-});
+if (rotXNegBtn) rotXNegBtn.addEventListener('click', () => rotateSelectedObject('x', -1));
+if (rotXPosBtn) rotXPosBtn.addEventListener('click', () => rotateSelectedObject('x', 1));
+if (rotYNegBtn) rotYNegBtn.addEventListener('click', () => rotateSelectedObject('y', -1));
+if (rotYPosBtn) rotYPosBtn.addEventListener('click', () => rotateSelectedObject('y', 1));
+if (rotZNegBtn) rotZNegBtn.addEventListener('click', () => rotateSelectedObject('z', -1));
+if (rotZPosBtn) rotZPosBtn.addEventListener('click', () => rotateSelectedObject('z', 1));
 
-angleStepSelect?.addEventListener('change', () => {
-  updateStatus(`Rotationsschritt: ${angleStepSelect.value} Grad`);
-});
+if (snapToggle) {
+  snapToggle.addEventListener('change', () => {
+    updateStatus(snapToggle.checked ? 'Snap aktiv: 0.5 cm Raster' : 'Snap deaktiviert: freie Schritte');
+  });
+}
+
+if (angleStepSelect) {
+  angleStepSelect.addEventListener('change', () => {
+    updateStatus(`Rotationsschritt: ${angleStepSelect.value} Grad`);
+  });
+}
 
 updateSelectionText();
 updatePrecisionText();
