@@ -61,7 +61,7 @@ const resetViewBtn = document.getElementById('resetViewBtn');
 const statusText = document.getElementById('statusText');
 const precisionText = document.getElementById('precisionText');
 const selectionText = document.getElementById('selectionText');
-const viewModeBtn = document.getElementById('viewModeBtn');
+const viewModeSelect = document.getElementById('viewModeSelect');
 const scaleSlider = document.getElementById('scaleSlider');
 const scaleValue = document.getElementById('scaleValue');
 
@@ -170,8 +170,8 @@ function updateScaleText(value) {
 }
 
 function updateViewModeText(mode) {
-  if (viewModeBtn) {
-    viewModeBtn.textContent = `Ansicht: ${viewModeLabels[mode] || mode}`;
+  if (viewModeSelect) {
+    viewModeSelect.value = mode;
   }
 }
 
@@ -563,10 +563,9 @@ window.addEventListener('resize', () => {
   }
 });
 
-if (viewModeBtn) {
-  viewModeBtn.addEventListener('click', () => {
-    const nextModeIndex = (viewModes.indexOf(currentViewMode) + 1) % viewModes.length;
-    currentViewMode = viewModes[nextModeIndex];
+if (viewModeSelect) {
+  viewModeSelect.addEventListener('change', () => {
+    currentViewMode = viewModeSelect.value;
     updateViewModeText(currentViewMode);
 
     const selected = getSelectedObject();
