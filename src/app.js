@@ -65,6 +65,8 @@ const prevObjBtn = document.getElementById('prevObjBtn');
 const nextObjBtn = document.getElementById('nextObjBtn');
 const snapToggle = document.getElementById('snapToggle');
 const angleStepSelect = document.getElementById('angleStep');
+const toolsToggleBtn = document.getElementById('toolsToggleBtn');
+const toolsSheet = document.getElementById('toolsSheet');
 
 const sampleModelUrl = '../assets/Test.glb';
 
@@ -150,6 +152,12 @@ function updateStatus(message) {
   }
 }
 
+function setToolsOpen(open) {
+  if (!toolsSheet || !toolsToggleBtn) return;
+  toolsSheet.hidden = !open;
+  toolsToggleBtn.textContent = open ? 'Werkzeuge schließen' : 'Werkzeuge';
+}
+
 function loadModelFromUrl(url, label = 'Modell', revokeAfterLoad = false) {
   const loader = new GLTFLoader();
   updateStatus(`Lade ${label}…`);
@@ -214,9 +222,16 @@ loadSampleBtn.addEventListener('click', () => {
 
 resetViewBtn.addEventListener('click', resetView);
 
+if (toolsToggleBtn) {
+  toolsToggleBtn.addEventListener('click', () => {
+    setToolsOpen(toolsSheet ? toolsSheet.hidden : true);
+  });
+}
+
 setModel(createDefaultModel());
 resetView();
 updateStatus('Klicke auf einen Button, um ein Modell zu laden.');
+setToolsOpen(false);
 
 // --- Augmented Reality ---
 
@@ -427,6 +442,7 @@ function placeModel() {
 
 renderer.xr.addEventListener('sessionstart', () => {
   isArSessionActive = true;
+  setToolsOpen(false);
 
   // Hintergrund/Fog würden das Kamerabild übermalen.
   scene.background = null;
