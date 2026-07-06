@@ -69,8 +69,44 @@
         auf einer Fläche erscheint. Tippen platziert ein Objekt, danach kann es uebers
         Koordinatensystem in 0.5-cm-Schritten fein ausgerichtet werden.
       </p>
+      <div id="errorPanel" class="errorPanel" hidden>
+        <strong>Fehler beim Laden</strong>
+        <p id="errorMessage" class="hint">Unbekannter Fehler.</p>
+        <p class="hint">
+          Bitte Seite neu laden. Wenn es weiter haengt, in Chrome oeffnen und Browser-Cache leeren.
+        </p>
+      </div>
     </div>
 
-    <script type="module" src="./app.js"></script>
+    <script>
+      (function () {
+        const panel = document.getElementById('errorPanel');
+        const message = document.getElementById('errorMessage');
+
+        function showAppError(headline, detail) {
+          if (!panel || !message) return;
+          const text = detail ? `${headline}: ${detail}` : headline;
+          message.textContent = text;
+          panel.hidden = false;
+        }
+
+        window.__showAppError = showAppError;
+
+        window.addEventListener('error', (event) => {
+          const detail = event && event.message ? event.message : 'JavaScript Fehler';
+          showAppError('JavaScript-Ausnahme', detail);
+        });
+
+        window.addEventListener('unhandledrejection', (event) => {
+          const reason = event && event.reason ? String(event.reason) : 'Unbehandeltes Promise-Problem';
+          showAppError('Promise-Fehler', reason);
+        });
+      })();
+    </script>
+    <script
+      type="module"
+      src="./app.js"
+      onerror="window.__showAppError && window.__showAppError('Modul-Ladefehler', 'app.js konnte nicht geladen oder ausgefuehrt werden.')"
+    ></script>
   </body>
 </html>
