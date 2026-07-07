@@ -1,15 +1,15 @@
-# Rhino → WebXR (Meta Quest)
+﻿# Rhino → WebXR (Meta Quest)
 
-Meta-Quest-Variante des Projekts [WEBXR_TEST](https://github.com/WEFOTH/WEBXR_TEST): Rhino-3D-Modelle (.glb/.gltf) im **Passthrough-Mixed-Reality** der Quest platzieren — im Quest-Browser, ohne App-Installation.
+Meta-Quest-Variante des Projekts [WEBXR_ANDROID](https://github.com/WEFOTH/WEBXR_ANDROID): Rhino-3D-Modelle (.glb/.gltf) im **Passthrough-Mixed-Reality** der Quest platzieren — im Quest-Browser, ohne App-Installation.
 
 **Live-Demo:** https://wefoth.github.io/WEBXR_QUEST/src/index.html
 **QR-Code:** https://wefoth.github.io/WEBXR_QUEST/qr-codes/qrcode.html
 
-> **Beziehung zum Hauptprojekt:** Dieses Repo ist ein Ableger mit gemeinsamer Git-Historie. Das Smartphone-Repo WEBXR_TEST ist als `upstream` eingetragen — gemeinsame Verbesserungen entstehen dort und werden hier per `git fetch upstream && git merge upstream/main` übernommen. Quest-spezifische Features leben nur in diesem Repo.
+> **Beziehung zum Hauptprojekt:** Dieses Repo ist ein Ableger mit gemeinsamer Git-Historie. Das Smartphone-Repo WEBXR_ANDROID ist als `upstream` eingetragen — gemeinsame Verbesserungen entstehen dort und werden hier per `git fetch upstream && git merge upstream/main` übernommen. Quest-spezifische Features leben nur in diesem Repo.
 
 ## Funktionen (zusätzlich zum Hauptprojekt)
 
-Alles aus WEBXR_TEST (Modell laden, Hit-Test-Platzierung, Verankerung per WebXR Anchors, Auto-Ausrichtung zum Betrachter, Auswahl, Ansicht/Skalierung/Drehung pro Objekt) **plus:**
+Alles aus WEBXR_ANDROID (Modell laden, Hit-Test-Platzierung, Verankerung per WebXR Anchors, Auto-Ausrichtung zum Betrachter, Auswahl, Ansicht/Skalierung/Drehung pro Objekt) **plus:**
 
 - **Ebenen-Snap (Stufe 2):** Platzierungspunkte rasten auf erkannte horizontale Ebenen aus dem Quest Space Setup ein (innerhalb 12 cm und der Ebenen-Umrandung) — eliminiert Höhenfehler, Objekte stehen exakt auf Boden/Tisch
 - **Persistente Anker (Stufe 3):** platzierte Objekte werden per `requestPersistentHandle()` dauerhaft gespeichert (Handles + Objekt-Einstellungen im `localStorage`) und beim nächsten AR-Start **an derselben Stelle im Raum wiederhergestellt** — auch nach Headset-Neustart
@@ -33,7 +33,7 @@ Alles aus WEBXR_TEST (Modell laden, Hit-Test-Platzierung, Verankerung per WebXR 
 
 ## Projektstruktur
 
-Identisch zu WEBXR_TEST (`src/index.html`, `src/app.js`, `src/styles.css`, `assets/`, `qr-codes/`). Quest-spezifischer Code liegt gesammelt in `src/app.js`:
+Identisch zu WEBXR_ANDROID (`src/index.html`, `src/app.js`, `src/styles.css`, `assets/`, `qr-codes/`). Quest-spezifischer Code liegt gesammelt in `src/app.js`:
 
 - `snapPointToDetectedPlane()` — Ebenen-Snap für Ring und Platzierung
 - Abschnitt „Persistente Anker" — `localStorage`-Verwaltung, `persistAnchor()`, `restorePersistedAnchors()`, `spawnPlacedFromEntry()`
@@ -43,7 +43,7 @@ Identisch zu WEBXR_TEST (`src/index.html`, `src/app.js`, `src/styles.css`, `asse
 ```powershell
 git clone https://github.com/WEFOTH/WEBXR_QUEST.git
 cd WEBXR_QUEST
-git remote add upstream https://github.com/WEFOTH/WEBXR_TEST.git
+git remote add upstream https://github.com/WEFOTH/WEBXR_ANDROID.git
 
 # Verbesserungen aus dem Hauptprojekt übernehmen:
 git fetch upstream
@@ -67,3 +67,5 @@ Lokaler Server, Deployment und Stolpersteine: wie im Hauptprojekt — siehe [SET
 
 **Entwickler:** Florian Weininger · OTH Regensburg
 *Stand: 07.07.2026*
+
+

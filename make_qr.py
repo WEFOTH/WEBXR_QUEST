@@ -1,9 +1,9 @@
-"""Generiert die QR-Codes für die GitHub-Pages-URLs nach qr-codes/."""
+﻿"""Generiert die QR-Codes für die GitHub-Pages-URLs nach qr-codes/."""
 from pathlib import Path
 
 import qrcode
 
-BASE_URL = 'https://wefoth.github.io/WEBXR_TEST/'
+BASE_URL = 'https://wefoth.github.io/WEBXR_QUEST/'
 OUT_DIR = Path(__file__).parent / 'qr-codes'
 
 TARGETS = {
@@ -14,3 +14,6 @@ for filename, url in TARGETS.items():
     out_path = OUT_DIR / filename
     qrcode.make(url).save(out_path)
     print(f'{url} -> {out_path}')
+
+
+

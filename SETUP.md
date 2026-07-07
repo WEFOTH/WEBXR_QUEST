@@ -1,4 +1,4 @@
-# Setup & Entwicklung — Quest-Variante
+﻿# Setup & Entwicklung — Quest-Variante
 
 *Stand: 07.07.2026*
 
@@ -7,11 +7,11 @@
 ```powershell
 git clone https://github.com/WEFOTH/WEBXR_QUEST.git
 cd WEBXR_QUEST
-git remote add upstream https://github.com/WEFOTH/WEBXR_TEST.git
+git remote add upstream https://github.com/WEFOTH/WEBXR_ANDROID.git
 ```
 
 - `origin` → dieses Repo (hierhin pushen)
-- `upstream` → Hauptprojekt WEBXR_TEST (von dort gemeinsame Verbesserungen holen)
+- `upstream` → Hauptprojekt WEBXR_ANDROID (von dort gemeinsame Verbesserungen holen)
 
 ## Upstream-Workflow
 
@@ -48,3 +48,5 @@ https://wefoth.github.io/WEBXR_QUEST/src/index.html
 ## QR-Code aktualisieren
 
 Nur nötig, wenn sich eine Seiten-URL ändert: neues PNG erzeugen (z. B. `python make_qr.py` mit angepasster URL oder ein Online-Generator) und `qr-codes/qrcode.png` + Link in `qr-codes/qrcode.html` austauschen.
+
+

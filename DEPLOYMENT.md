@@ -1,4 +1,4 @@
-# Deployment: GitHub Pages — Quest-Variante
+﻿# Deployment: GitHub Pages — Quest-Variante
 
 *Stand: 07.07.2026*
 
@@ -26,4 +26,6 @@ git push
   ```
 - **Prüfen, ob der neue Stand live ist:** `https://wefoth.github.io/WEBXR_QUEST/src/app.js` abrufen und nach einem Stichwort aus dem letzten Commit suchen
 
-Ausführliches Pages-Troubleshooting: [WEBXR_TEST/DEPLOYMENT.md](https://github.com/WEFOTH/WEBXR_TEST/blob/main/DEPLOYMENT.md).
+Ausführliches Pages-Troubleshooting: [WEBXR_ANDROID/DEPLOYMENT.md](https://github.com/WEFOTH/WEBXR_ANDROID/blob/main/DEPLOYMENT.md).
+
+

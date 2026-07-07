@@ -1,8 +1,8 @@
-# Architektur — Quest-Variante
+﻿# Architektur — Quest-Variante
 
 *Stand: 07.07.2026*
 
-Die Grundarchitektur (Szene, Modell-Pipeline, Platzierung, Auswahl, Ansichtsmodi, AR-Leiste, Anchors Stufe 1) ist identisch zum Hauptprojekt und dort dokumentiert: [WEBXR_TEST/ARCHITECTURE.md](https://github.com/WEFOTH/WEBXR_TEST/blob/main/ARCHITECTURE.md). Hier stehen nur die Quest-Besonderheiten.
+Die Grundarchitektur (Szene, Modell-Pipeline, Platzierung, Auswahl, Ansichtsmodi, AR-Leiste, Anchors Stufe 1) ist identisch zum Hauptprojekt und dort dokumentiert: [WEBXR_ANDROID/ARCHITECTURE.md](https://github.com/WEFOTH/WEBXR_ANDROID/blob/main/ARCHITECTURE.md). Hier stehen nur die Quest-Besonderheiten.
 
 ## Session-Features
 
@@ -38,3 +38,5 @@ Grenzen: Handles sind gerätegebunden; `localStorage` ist browserprofilgebunden;
 ## Bekannte Architektur-Lücke
 
 Ohne dom-overlay gibt es in der Session **keine UI**. Geplant: In-Headset-Menü als three.js-Objekte (Panel am Controller/Handgelenk), das die Funktionen der HTML-Leiste übernimmt — inkl. Raycast-Buttons. Bis dahin: Einstellungen vor dem AR-Start wählen.
+
+
