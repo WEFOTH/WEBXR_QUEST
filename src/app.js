@@ -64,6 +64,7 @@ const precisionText = document.getElementById('precisionText');
 const selectionText = document.getElementById('selectionText');
 const viewModeSelect = document.getElementById('viewModeSelect');
 const objectSelect = document.getElementById('objectSelect');
+const deleteObjectBtn = document.getElementById('deleteObjectBtn');
 const scaleSlider = document.getElementById('scaleSlider');
 const scaleValue = document.getElementById('scaleValue');
 const rotateSlider = document.getElementById('rotateSlider');
@@ -444,6 +445,11 @@ function syncObjectDropdown() {
   objectSelect.disabled = placedObjects.length === 0;
 }
 
+function syncDeleteButtonState() {
+  if (!deleteObjectBtn) return;
+  deleteObjectBtn.disabled = selectedObjectIndex === -1 || placedObjects.length === 0;
+}
+
 function setObjectHighlight(placed, active) {
   placed.axes.visible = active;
   placed.group.traverse((child) => {
@@ -509,6 +515,61 @@ function selectObject(index) {
   updateSelectionText();
   updatePrecisionText();
   syncObjectDropdown();
+  syncDeleteButtonState();
+}
+
+function removePersistedAnchorEntry(handle) {
+  if (!handle) return;
+  const entries = loadPersistedAnchorEntries();
+  const filtered = entries.filter((entry) => entry.handle !== handle);
+  storePersistedAnchorEntries(filtered);
+}
+
+function removePlacedObject(index) {
+  if (index < 0 || index >= placedObjects.length) {
+    updateStatus('Kein gültiges Objekt zum Löschen ausgewählt.');
+    return;
+  }
+
+  const removed = placedObjects[index];
+  const selected = getSelectedObject();
+  if (selected && selected === removed) {
+    setObjectHighlight(selected, false);
+  }
+
+  const session = renderer.xr.getSession();
+  if (removed.persistentHandle) {
+    removePersistedAnchorEntry(removed.persistentHandle);
+    if (session && typeof session.deletePersistentAnchor === 'function') {
+      session.deletePersistentAnchor(removed.persistentHandle).catch(() => {});
+    }
+  }
+
+  if (removed.anchor && typeof removed.anchor.delete === 'function') {
+    try {
+      removed.anchor.delete();
+    } catch {
+      // Manche Browser-Implementierungen erlauben das explizite Löschen nicht.
+    }
+  }
+
+  scene.remove(removed.group);
+  placedObjects.splice(index, 1);
+
+  let nextIndex = -1;
+  if (placedObjects.length > 0) {
+    if (selectedObjectIndex === index) {
+      nextIndex = Math.min(index, placedObjects.length - 1);
+    } else if (selectedObjectIndex > index) {
+      nextIndex = selectedObjectIndex - 1;
+    } else {
+      nextIndex = selectedObjectIndex;
+    }
+  }
+
+  selectedObjectIndex = -1;
+  selectObject(nextIndex);
+  updateStatus(`Objekt gelöscht (${placedObjects.length} verbleibend).`);
 }
 
 function createPlacedAxes() {
@@ -847,6 +908,18 @@ if (objectSelect) {
   });
 }
 
+if (deleteObjectBtn) {
+  deleteObjectBtn.addEventListener('click', () => {
+    const selected = getSelectedObject();
+    if (!selected) {
+      updateStatus('Bitte zuerst ein Objekt auswählen.');
+      return;
+    }
+
+    removePlacedObject(selectedObjectIndex);
+  });
+}
+
 if (scaleSlider) {
   scaleSlider.addEventListener('input', () => {
     currentScaleFactor = Number(scaleSlider.value);
@@ -880,6 +953,7 @@ if (rotateSlider) {
 updateSelectionText();
 updatePrecisionText();
 syncObjectDropdown();
+syncDeleteButtonState();
 
 function animate(timestamp, frame) {
   if (frame && hitTestSource) {
