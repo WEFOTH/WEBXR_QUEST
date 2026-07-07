@@ -1,340 +1,40 @@
-# Architektur & Technische Details
+# Architektur — Quest-Variante
 
-## Systemarchitektur
+*Stand: 07.07.2026*
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Browser (Chrome)                       │
-├─────────────────────────────────────────────────────────┤
-│  ┌──────────────────────────────────────────────────┐   │
-│  │          WebXR API (immersive-ar)                │   │
-│  │  - AR Session Management                         │   │
-│  │  - Reference Space (local)                       │   │
-│  │  - Frame Input Handling                          │   │
-│  └──────────────────────────────────────────────────┘   │
-│                        ↓                                  │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │          Three.js 0.160.0 (WebGL)                │   │
-│  │  ┌────────────────────────────────────────────┐  │   │
-│  │  │ Scene Management                            │  │   │
-│  │  │ - 3D Objects (Meshes)                      │  │   │
-│  │  │ - Camera (PerspectiveCamera)               │  │   │
-│  │  │ - Lighting (Ambient + Directional)         │  │   │
-│  │  │ - Helpers (GridHelper, ShadowMaterial)     │  │   │
-│  │  └────────────────────────────────────────────┘  │   │
-│  │                                                   │   │
-│  │  ┌────────────────────────────────────────────┐  │   │
-│  │  │ Renderer                                    │  │   │
-│  │  │ - WebGL 2.0 Context                        │  │   │
-│  │  │ - XR Enabled (xr.enabled = true)           │  │   │
-│  │  │ - setReferenceSpaceType('local')           │  │   │
-│  │  └────────────────────────────────────────────┘  │   │
-│  │                                                   │   │
-│  │  ┌────────────────────────────────────────────┐  │   │
-│  │  │ Loaders                                     │  │   │
-│  │  │ - GLTFLoader (für .glb/.gltf)             │  │   │
-│  │  │ - FileReader (für Upload)                  │  │   │
-│  │  └────────────────────────────────────────────┘  │   │
-│  │                                                   │   │
-│  │  ┌────────────────────────────────────────────┐  │   │
-│  │  │ Controls                                    │  │   │
-│  │  │ - OrbitControls (3D Navigation)            │  │   │
-│  │  │ - ARButton (XR Session Start)              │  │   │
-│  │  └────────────────────────────────────────────┘  │   │
-│  └──────────────────────────────────────────────────┘   │
-│                        ↓                                  │
-│  ┌──────────────────────────────────────────────────┐   │
-│  │         Device Hardware (Pixel)                  │   │
-│  │  - Camera (Videostream)                         │   │
-│  │  - IMU (Rotation/Position)                      │   │
-│  │  - GPU (WebGL Rendering)                        │   │
-│  └──────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+Die Grundarchitektur (Szene, Modell-Pipeline, Platzierung, Auswahl, Ansichtsmodi, AR-Leiste, Anchors Stufe 1) ist identisch zum Hauptprojekt und dort dokumentiert: [WEBXR_TEST/ARCHITECTURE.md](https://github.com/WEFOTH/WEBXR_TEST/blob/main/ARCHITECTURE.md). Hier stehen nur die Quest-Besonderheiten.
+
+## Session-Features
+
+```js
+optionalFeatures: ['hit-test', 'dom-overlay', 'anchors', 'plane-detection']
 ```
 
-## Datenflusss: Von Rhino zu AR
+Alles optional — fehlt ein Feature, degradiert die App auf das Verhalten des Hauptprojekts. `dom-overlay` wird vom Quest-Browser nicht unterstützt (HTML-UI in der Session unsichtbar); der Eintrag bleibt, damit dieselbe Seite auch auf dem Handy funktioniert.
 
-```
-Rhino Model
-    ↓ (Export als .glb)
-assets/mymodel.glb (Binary Format)
-    ↓ (HTTP GET oder FileReader)
-GLTFLoader.parse()
-    ↓
-THREE.Group (Scene Graph)
-    ├── Meshes (Geometries + Materials)
-    ├── Lights
-    └── Armatures (wenn animiert)
-    ↓ (Automatic Centering)
-Box3.getCenter() → Position Offset
-Box3.getSize() → Scale Calculation
-    ↓ (Scene.add())
-Three.js Scene
-    ↓ (renderer.render() in animate loop)
-WebGL Canvas
-    ↓ (XR Mode or Desktop)
-┌─────────────────────────────────────┐
-│  Desktop: 2D Canvas Display         │
-│  AR Mode: Device Camera + Overlay   │
-└─────────────────────────────────────┘
-```
+## Stufe 2: Ebenen-Snap (`snapPointToDetectedPlane`)
 
-## Module & Komponenten
+Pro Frame wird der Hit-Test-Punkt gegen `frame.detectedPlanes` geprüft (Ebenen liefert das Quest Space Setup):
 
-### 1. Scene Setup (`app.js`)
+1. nur Ebenen mit `orientation === 'horizontal'`
+2. Punkt in den Ebenen-Raum transformieren (`plane.planeSpace`-Pose, Matrix-Inverse)
+3. Snap nur, wenn der Punkt **±12 cm** über/unter der Ebene liegt **und** innerhalb der Bounding-Box des Ebenen-Polygons (+5 cm Toleranz)
+4. lokale Höhe auf 0 setzen, zurücktransformieren → Ring (`reticle`) und Platzierungs-Grid zeigen die gesnappte Position
 
-```javascript
-// Initialisierung
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.01, 100);
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+Die Platzierung übernimmt die Ring-Position. Weil der **Anker** aus dem *rohen* Hit-Test-Ergebnis erzeugt wird, speichert jedes Objekt einen `anchorOffset` (= gesnappte Position − rohe Hit-Position); die Anker-Nachführung in `animate()` addiert ihn pro Frame.
 
-// Konfiguration für AR
-renderer.xr.enabled = true;
-renderer.xr.setReferenceSpaceType('local');
-```
+## Stufe 3: Persistente Anker
 
-**Eigenschaften:**
-- FOV: 45° (Mobil-optimiert)
-- Near Plane: 0.01 (für kleine Objekte)
-- Far Plane: 100 (für große Szenen)
-- Alpha: true (für Kamera-Hintergrund in AR)
+- **Speichern:** Nach `createAnchor()` → `anchor.requestPersistentHandle()`. Das Handle (UUID) plus Objekt-Einstellungen (`viewMode`, `scaleFactor`, `rotationDeg`, `baseYaw`, `anchorOffset`) landet als Eintrag im `localStorage` (Key `webxrQuestPersistedAnchors`). Slider-/Dropdown-Änderungen aktualisieren den Eintrag (`syncPersistedEntry`)
+- **Wiederherstellen:** Bei `sessionstart` → `restorePersistedAnchors(session)`: für jeden Eintrag `session.restorePersistentAnchor(handle)`; `spawnPlacedFromEntry()` erzeugt einen Klon des aktuell geladenen Modells mit den gespeicherten Einstellungen. Der Klon startet unsichtbar und wird erst mit der ersten gültigen Anker-Pose eingeblendet (verhindert Aufblitzen bei 0/0/0)
+- **Löschen:** Button „Gespeicherte Anker löschen" → `session.deletePersistentAnchor(handle)` (falls Session aktiv) + `localStorage` leeren
 
-### 2. Model Loading Pipeline
+Grenzen: Handles sind gerätegebunden; `localStorage` ist browserprofilgebunden; das Modell selbst wird nicht persistiert (siehe PROJEKTSTAND, nächste Schritte).
 
-```javascript
-async function loadModelFromUrl(url, label) {
-  // 1. Validierung
-  if (!url.endsWith('.glb') && !url.endsWith('.gltf')) {
-    throw new Error('Nur .glb/.gltf Formate unterstützt');
-  }
+## Eingabe auf der Quest
 
-  // 2. GLTFLoader instanziieren
-  const loader = new THREE.GLTFLoader();
+`renderer.xr.getController(0)` liefert auf der Quest den Controller-Ray (auf dem Handy den Bildschirm-Tap) — Auswahl per Zeigen+Trigger und Platzierung am Ring funktionieren daher ohne Quest-spezifischen Code. Handtracking löst dasselbe `select`-Event per Pinch aus.
 
-  // 3. Progress-Tracking
-  loader.load(url, 
-    (gltf) => {
-      // 4. Asset extrahieren
-      const model = gltf.scene;
-      
-      // 5. Auto-Centering
-      const box = new THREE.Box3().setFromObject(model);
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z);
-      const scale = 1.2 / maxDim;
-      
-      model.scale.multiplyScalar(scale);
-      
-      const center = box.getCenter(new THREE.Vector3());
-      model.position.sub(center);
-      model.position.y += 0.6;
-      
-      // 6. Scene hinzufügen
-      scene.add(model);
-      activeModel = model;
-    },
-    (progress) => {
-      // 7. UI Update
-      updateStatus(`Lädt: ${(progress.loaded / progress.total * 100).toFixed(0)}%`);
-    },
-    (error) => {
-      // 8. Error Handling
-      console.error('Fehler beim Laden:', error);
-      updateStatus('❌ Modell konnte nicht geladen werden');
-    }
-  );
-}
-```
+## Bekannte Architektur-Lücke
 
-### 3. AR Session Handling (`xr-test.html`)
-
-```javascript
-// AR-Modus Aktivierung
-renderer.xr.addEventListener('sessionstart', async () => {
-  isARActive = true;
-  placeBtn.style.display = 'block'; // Platzierungs-Button zeigen
-  
-  // AR-spezifische Anpassungen
-  scene.background = null; // Transparenz für Live-Kamera
-  // GridHelper bereits sichtbar (wird bei Scene-Add hinzugefügt)
-});
-
-// AR-Modus Beendigung
-renderer.xr.addEventListener('sessionend', () => {
-  isARActive = false;
-  placeBtn.style.display = 'none';
-  scene.background = new THREE.Color(0x1a1a1a); // Zurück zu schwarzem Hintergrund
-});
-```
-
-### 4. Objekt-Platzierung System
-
-#### Button-Based Approach (aktuell)
-```javascript
-placeBtn.addEventListener('click', () => {
-  if (!isARActive) return;
-
-  // 1. Mesh klonen
-  const newMesh = mesh.clone();
-
-  // 2. Position vor Camera setzen
-  const cameraWorldPos = camera.getWorldPosition(new THREE.Vector3());
-  newMesh.position.copy(cameraWorldPos);
-  newMesh.position.z -= 2; // 2 Einheiten vor Camera
-
-  // 3. Scaling
-  newMesh.scale.set(0.6, 0.6, 0.6);
-
-  // 4. Schatten erstellen
-  const shadowGeo = new THREE.PlaneGeometry(1.2, 1.2);
-  const shadow = new THREE.Mesh(shadowGeo, shadowMaterial);
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.copy(newMesh.position);
-  shadow.position.y = newMesh.position.y - 0.6;
-
-  // 5. Scene hinzufügen
-  scene.add(newMesh);
-  scene.add(shadow);
-  placedObjects.push({mesh: newMesh, shadow: shadow});
-});
-```
-
-**Vorher (Hit-Test Ansatz - problematisch):**
-```javascript
-// ❌ Komplexer, nicht zuverlässig auf Mobile
-// Erforderte: Controller Tracking, Reference Space, Hit Test Source
-// Resultat: Reticle sichtbar aber Platzierung unreliabel
-```
-
-## Rendering Pipeline
-
-### Desktop Mode
-```
-Browser.animate() 
-  → camera.update()
-  → scene.render()
-  → Canvas.display()
-  → 60 FPS
-```
-
-### AR Mode
-```
-Browser.animate(time, frame) 
-  → frame.getViewerPose()
-  → camera.matrix.fromArray()
-  → scene.render() 
-  → XR Compositor
-  → Device Display (Overlay)
-  → 30-60 FPS (je nach Gerät)
-```
-
-## Performance Optimizations
-
-### 1. Memory Management
-- ✅ Modelle: Buffer-Geometrien (keine Duplikate)
-- ✅ Texturen: Automatisch vom GLTFLoader optimiert
-- ✅ Lights: Nur 2 (Ambient + Directional)
-- ✅ Helpers: GridHelper (efficient mesh)
-
-### 2. Rendering Optimizations
-- ✅ WebGL 2.0 (Hardware Acceleration)
-- ✅ Pixel Ratio Anpassung (nicht über 2x)
-- ✅ Frustum Culling (Three.js automatic)
-- ✅ Efficient ShadowMaterial (keine echten Schatten)
-
-### 3. AR Optimizations
-- ✅ Reference Space: 'local' (schneller als 'viewer')
-- ✅ Keine Hit-Test Source (vereinfacht Logik)
-- ✅ Minimal Geometry für Visuals (Grid, Crosshair)
-
-## Visual Features
-
-### 1. Crosshair (AR Positioning Aid)
-```css
-#crosshair::before {
-  width: 40px;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.6);
-}
-/* Horizontal line in center */
-
-#crosshair::after {
-  width: 2px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.6);
-}
-/* Vertical line in center */
-```
-
-### 2. Ground Grid
-```javascript
-const gridHelper = new THREE.GridHelper(
-  10,           // Size
-  20,           // Divisions
-  0x4ade80,     // Center line color (green)
-  0x666666      // Grid color (gray)
-);
-gridHelper.position.y = -2.5; // Below objects
-```
-
-### 3. Shadow System
-```javascript
-const shadowMaterial = new THREE.ShadowMaterial({ opacity: 0.3 });
-// Creates soft shadows under placed objects
-// Updates position every frame: shadow.position.y = mesh.position.y - 0.6
-```
-
-## Browser APIs Verwendet
-
-| API | Zweck | Status |
-|-----|-------|--------|
-| WebXR | AR Sessions | ✅ Stabil |
-| WebGL 2.0 | Rendering | ✅ Stabil |
-| FileReader | Local Upload | ✅ Stabil |
-| Fetch/XMLHttpRequest | Model Download | ✅ Stabil |
-| Geolocation | Nicht verwendet | ⏸️ Optional |
-| Accelerometer | Nicht verwendet | ⏸️ Optional |
-| Gyroscope | Automatic via XR | ✅ Stabil |
-
-## Fehlerbehandlung
-
-### Model Loading Errors
-```javascript
-try {
-  // GLTFLoader throws on invalid file
-  loader.load(url, onSuccess, onProgress, onError);
-} catch(e) {
-  console.error('Parse error:', e);
-  updateStatus('❌ Modell-Format ungültig');
-}
-```
-
-### AR Session Errors
-```javascript
-navigator.xr.requestSession('immersive-ar', {
-  requiredFeatures: ['hit-test'],
-  optionalFeatures: ['dom-overlay']
-}).catch((error) => {
-  console.error('AR nicht verfügbar:', error);
-  // Fallback zu Desktop-3D
-});
-```
-
-## Skalierungsmöglichkeiten
-
-### Für mehr Performance
-- [ ] Instancing für mehrfache Objekte
-- [ ] Level of Detail (LOD) für Modelle
-- [ ] Texture Compression (KTX2)
-- [ ] Web Workers für Model Loading
-
-### Für mehr Features
-- [ ] Persistente Platzierungs-Speicherung
-- [ ] Multi-Touch Gesten
-- [ ] Modell-Animation Support
-- [ ] Collaborative AR (WebRTC)
-
----
-
-**Weitere Details:** Siehe [PROJECT_SPEC.md](PROJECT_SPEC.md)
+Ohne dom-overlay gibt es in der Session **keine UI**. Geplant: In-Headset-Menü als three.js-Objekte (Panel am Controller/Handgelenk), das die Funktionen der HTML-Leiste übernimmt — inkl. Raycast-Buttons. Bis dahin: Einstellungen vor dem AR-Start wählen.
