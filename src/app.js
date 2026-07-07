@@ -58,6 +58,7 @@ const hud = document.getElementById('hud');
 const fileInput = document.getElementById('fileInput');
 const loadSampleBtn = document.getElementById('loadSampleBtn');
 const resetViewBtn = document.getElementById('resetViewBtn');
+const clearAnchorsBtn = document.getElementById('clearAnchorsBtn');
 const statusText = document.getElementById('statusText');
 const precisionText = document.getElementById('precisionText');
 const selectionText = document.getElementById('selectionText');
@@ -289,6 +290,23 @@ loadSampleBtn.addEventListener('click', () => {
 
 resetViewBtn.addEventListener('click', resetView);
 
+if (clearAnchorsBtn) {
+  clearAnchorsBtn.addEventListener('click', () => {
+    const entries = loadPersistedAnchorEntries();
+    const session = renderer.xr.getSession();
+    if (session && typeof session.deletePersistentAnchor === 'function') {
+      entries.forEach((entry) => {
+        session.deletePersistentAnchor(entry.handle).catch(() => {});
+      });
+    }
+    storePersistedAnchorEntries([]);
+    placedObjects.forEach((placed) => {
+      placed.persistentHandle = null;
+    });
+    updateStatus(`${entries.length} gespeicherte(r) Anker gelöscht.`);
+  });
+}
+
 setModel(createDefaultModel());
 resetView();
 updateStatus('Klicke auf einen Button, um ein Modell zu laden.');
@@ -298,7 +316,7 @@ updateViewModeText(currentViewMode);
 // --- Augmented Reality ---
 
 const arButton = ARButton.createButton(renderer, {
-  optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
+  optionalFeatures: ['hit-test', 'dom-overlay', 'anchors', 'plane-detection'],
   domOverlay: { root: document.body },
 });
 document.body.appendChild(arButton);
@@ -316,6 +334,12 @@ scene.add(reticle);
 
 let hitTestSource = null;
 let latestHitTestResult = null;
+const latestRawHitPosition = new THREE.Vector3();
+const snappedHitPosition = new THREE.Vector3();
+const reticleMatrix = new THREE.Matrix4();
+const planeMatrix = new THREE.Matrix4();
+const planeMatrixInverse = new THREE.Matrix4();
+const planeLocalPoint = new THREE.Vector3();
 const placedObjects = [];
 let selectedObjectIndex = -1;
 let isArSessionActive = false;
@@ -506,6 +530,150 @@ function applyPlacementSettingsToNode(node, viewMode, scaleFactor) {
   node.scale.setScalar(scaleFactor);
 }
 
+// Rastet einen Trefferpunkt auf eine erkannte horizontale Ebene ein (Quest Space Setup).
+function snapPointToDetectedPlane(frame, referenceSpace, point) {
+  const planes = frame.detectedPlanes;
+  if (!planes || planes.size === 0) return false;
+
+  let snapped = false;
+  planes.forEach((plane) => {
+    if (snapped) return;
+    if (plane.orientation && plane.orientation !== 'horizontal') return;
+    if (!plane.polygon || plane.polygon.length < 3) return;
+    const planePose = frame.getPose(plane.planeSpace, referenceSpace);
+    if (!planePose) return;
+
+    planeMatrix.fromArray(planePose.transform.matrix);
+    planeMatrixInverse.copy(planeMatrix).invert();
+    planeLocalPoint.copy(point).applyMatrix4(planeMatrixInverse);
+
+    // Nur einrasten, wenn der Punkt knapp ueber/unter der Ebene liegt …
+    if (Math.abs(planeLocalPoint.y) > 0.12) return;
+
+    // … und innerhalb der Ebenen-Umrandung (mit kleiner Toleranz).
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minZ = Infinity;
+    let maxZ = -Infinity;
+    for (const vertex of plane.polygon) {
+      minX = Math.min(minX, vertex.x);
+      maxX = Math.max(maxX, vertex.x);
+      minZ = Math.min(minZ, vertex.z);
+      maxZ = Math.max(maxZ, vertex.z);
+    }
+    const margin = 0.05;
+    if (planeLocalPoint.x < minX - margin || planeLocalPoint.x > maxX + margin) return;
+    if (planeLocalPoint.z < minZ - margin || planeLocalPoint.z > maxZ + margin) return;
+
+    planeLocalPoint.y = 0;
+    point.copy(planeLocalPoint.applyMatrix4(planeMatrix));
+    snapped = true;
+  });
+
+  return snapped;
+}
+
+// --- Persistente Anker: platzierte Objekte ueberleben das Session-Ende ---
+
+const persistedAnchorsKey = 'webxrQuestPersistedAnchors';
+
+function loadPersistedAnchorEntries() {
+  try {
+    const entries = JSON.parse(localStorage.getItem(persistedAnchorsKey) || '[]');
+    return Array.isArray(entries) ? entries : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function storePersistedAnchorEntries(entries) {
+  try {
+    localStorage.setItem(persistedAnchorsKey, JSON.stringify(entries));
+  } catch (error) {
+    // localStorage kann fehlen (Privatmodus) – Persistenz ist optional.
+  }
+}
+
+function syncPersistedEntry(placed) {
+  if (!placed.persistentHandle) return;
+  const entries = loadPersistedAnchorEntries();
+  const entry = {
+    handle: placed.persistentHandle,
+    viewMode: placed.viewMode,
+    scaleFactor: placed.scaleFactor,
+    rotationDeg: placed.rotationDeg,
+    baseYaw: placed.baseYaw,
+    anchorOffset: placed.anchorOffset.toArray(),
+  };
+  const index = entries.findIndex((item) => item.handle === placed.persistentHandle);
+  if (index >= 0) {
+    entries[index] = entry;
+  } else {
+    entries.push(entry);
+  }
+  storePersistedAnchorEntries(entries);
+}
+
+function persistAnchor(placed) {
+  if (!placed.anchor || typeof placed.anchor.requestPersistentHandle !== 'function') return;
+  placed.anchor
+    .requestPersistentHandle()
+    .then((handle) => {
+      placed.persistentHandle = handle;
+      syncPersistedEntry(placed);
+    })
+    .catch(() => {});
+}
+
+function spawnPlacedFromEntry(entry, anchor) {
+  if (!activeModel || placedObjects.length >= maxPlacedObjects) return;
+
+  const clone = modelRoot.clone(true);
+  clone.visible = false; // sichtbar erst mit der ersten Anker-Pose
+  clone.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = false;
+      child.receiveShadow = false;
+    }
+  });
+
+  const axes = createPlacedAxes();
+  clone.add(axes);
+  applyPlacementSettingsToNode(clone, entry.viewMode || 'original', entry.scaleFactor || 1);
+
+  scene.add(clone);
+  const placed = {
+    group: clone,
+    axes,
+    viewMode: entry.viewMode || 'original',
+    scaleFactor: entry.scaleFactor || 1,
+    baseYaw: entry.baseYaw || 0,
+    rotationDeg: entry.rotationDeg || 0,
+    anchor,
+    anchorOffset: new THREE.Vector3().fromArray(entry.anchorOffset || [0, 0, 0]),
+    persistentHandle: entry.handle,
+  };
+  applyRotationToPlaced(placed);
+  placedObjects.push(placed);
+  updateSelectionText();
+  syncObjectDropdown();
+  updateStatus(`${placedObjects.length} gespeicherte(s) Objekt(e) wiederhergestellt.`);
+}
+
+function restorePersistedAnchors(session) {
+  if (typeof session.restorePersistentAnchor !== 'function' || !activeModel) return;
+
+  const entries = loadPersistedAnchorEntries().slice(0, maxPlacedObjects);
+  entries.forEach((entry) => {
+    session
+      .restorePersistentAnchor(entry.handle)
+      .then((anchor) => {
+        spawnPlacedFromEntry(entry, anchor);
+      })
+      .catch(() => {});
+  });
+}
+
 function placeModel() {
   if (!renderer.xr.isPresenting || !activeModel) return;
 
@@ -555,15 +723,20 @@ function placeModel() {
     baseYaw,
     rotationDeg: currentRotationDeg,
     anchor: null,
+    anchorOffset: new THREE.Vector3(),
+    persistentHandle: null,
   };
   applyRotationToPlaced(placed);
 
   // Anchor haelt die Position stabil, wenn das Geraet sein Tracking korrigiert.
+  // Der Offset gleicht die Differenz zwischen rohem Hit-Punkt und Ebenen-Snap aus.
   if (reticle.visible && latestHitTestResult && typeof latestHitTestResult.createAnchor === 'function') {
+    placed.anchorOffset.subVectors(clone.position, latestRawHitPosition);
     latestHitTestResult
       .createAnchor()
       .then((anchor) => {
         placed.anchor = anchor;
+        persistAnchor(placed);
       })
       .catch(() => {
         placed.anchor = null;
@@ -601,6 +774,8 @@ renderer.xr.addEventListener('sessionstart', () => {
         hitTestSource = null;
       });
   }
+
+  restorePersistedAnchors(session);
 
   updateStatus('AR aktiv: Ring suchen und tippen zum Platzieren oder Objekt antippen zum Auswählen.');
   updateSelectionText();
@@ -654,6 +829,7 @@ if (viewModeSelect) {
       selected.viewMode = currentViewMode;
       applyViewModeToNode(selected.group, selected.viewMode);
       setObjectHighlight(selected, true);
+      syncPersistedEntry(selected);
     }
 
     updateStatus(`Ansicht: ${viewModeLabels[currentViewMode] || currentViewMode}`);
@@ -680,6 +856,7 @@ if (scaleSlider) {
     if (selected) {
       selected.scaleFactor = currentScaleFactor;
       selected.group.scale.setScalar(currentScaleFactor);
+      syncPersistedEntry(selected);
       updateStatus(`Skalierung: ${currentScaleFactor.toFixed(2)}×`);
     }
   });
@@ -694,6 +871,7 @@ if (rotateSlider) {
     if (selected) {
       selected.rotationDeg = currentRotationDeg;
       applyRotationToPlaced(selected);
+      syncPersistedEntry(selected);
       updateStatus(`Drehung: ${Math.round(currentRotationDeg)}°`);
     }
   });
@@ -708,12 +886,20 @@ function animate(timestamp, frame) {
     const hits = frame.getHitTestResults(hitTestSource);
     if (hits.length > 0) {
       latestHitTestResult = hits[0];
-      const pose = hits[0].getPose(renderer.xr.getReferenceSpace());
+      const referenceSpace = renderer.xr.getReferenceSpace();
+      const pose = hits[0].getPose(referenceSpace);
+      reticleMatrix.fromArray(pose.transform.matrix);
+      latestRawHitPosition.setFromMatrixPosition(reticleMatrix);
+      snappedHitPosition.copy(latestRawHitPosition);
+      if (snapPointToDetectedPlane(frame, referenceSpace, snappedHitPosition)) {
+        reticleMatrix.setPosition(snappedHitPosition);
+      }
+
       reticle.visible = true;
-      reticle.matrix.fromArray(pose.transform.matrix);
+      reticle.matrix.copy(reticleMatrix);
 
       placementGrid.visible = true;
-      placementGrid.matrix.fromArray(pose.transform.matrix);
+      placementGrid.matrix.copy(reticleMatrix);
       placementGrid.matrix.decompose(placementGridPosition, placementGridQuaternion, placementGridScale);
       placementGrid.position.copy(placementGridPosition);
       placementGrid.quaternion.copy(placementGridQuaternion);
@@ -733,7 +919,15 @@ function animate(timestamp, frame) {
       const anchorPose = frame.getPose(placed.anchor.anchorSpace, referenceSpace);
       if (anchorPose) {
         const p = anchorPose.transform.position;
-        placed.group.position.set(p.x, p.y, p.z);
+        const offset = placed.anchorOffset;
+        placed.group.position.set(
+          p.x + (offset ? offset.x : 0),
+          p.y + (offset ? offset.y : 0),
+          p.z + (offset ? offset.z : 0)
+        );
+        if (!placed.group.visible) {
+          placed.group.visible = true; // wiederhergestellte Objekte erst mit gueltiger Pose zeigen
+        }
       }
     }
   }
